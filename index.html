@@ -157,7 +157,6 @@
     const toyTitle = document.getElementById('toy-title');
     const toyCost = document.getElementById('toy-cost');
 
-    // Список игрушек
     const toysDatabase = [
         { name: "🧸 Плюшевый Мишка", minPrice: 150, maxPrice: 500 },
         { name: "🚗 Быстрая Машинка", minPrice: 100, maxPrice: 400 },
@@ -171,20 +170,18 @@
         { name: "🦄 Волшебный Единорог", minPrice: 250, maxPrice: 700 }
     ];
 
-    // Инициализируем аудио (на iOS оно изначально заблокировано "suspended")
     let audioCtx = null;
 
-    function initAudio() {
+    // Асинхронное пробуждение аудио для iOS
+    async function initAudio() {
         if (!audioCtx) {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         }
-        // Принудительно "будим" аудио-контекст на iOS
         if (audioCtx.state === 'suspended') {
-            audioCtx.resume();
+            await audioCtx.resume(); // Ждем, пока контекст перейдет в режим 'running'
         }
     }
 
-    // Включение камеры
     async function initCamera() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
@@ -198,37 +195,38 @@
         }
     }
 
-    // Функция звука
-    function playBeep() {
-        if (!audioCtx) initAudio();
-        if (audioCtx.state === 'suspended') audioCtx.resume();
+    // Добавляем async/await для стабильного проигрывания
+    async function playBeep() {
+        try {
+            await initAudio(); // Сначала гарантированно будим аудио
 
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        
-        osc.type = 'sine';
-        osc.frequency.value = 1300; 
-        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-        
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.1);
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            osc.type = 'sine';
+            osc.frequency.value = 1300; 
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.1);
+        } catch (e) {
+            console.log("Ошибка воспроизведения звука:", e);
+        }
     }
 
     let isScanning = false;
 
-    // Главная функция сканирования
-    function scanToy() {
-        // ВАЖНО: Активируем звук при самом первом тапе по экрану
-        initAudio();
-
+    // Делаем функцию асинхронной
+    async function scanToy() {
         if (isScanning) return; 
         isScanning = true;
 
-        // Играем звук и делаем вспышку
-        playBeep();
+        // Сначала играем звук (напрямую в событии клика)
+        await playBeep();
+        
         flash.style.opacity = '0.7';
         setTimeout(() => flash.style.opacity = '0', 100);
 
@@ -247,11 +245,12 @@
         }, 1500);
     }
 
-    // Запуск камеры
     window.addEventListener('DOMContentLoaded', initCamera);
 
-    // Дополнительный трюк для iOS: "будим" звук вообще при любом прикосновении к экрану
-    window.addEventListener('touchstart', initAudio, { once: true });
+    // Дополнительный жесткий триггер для разблокировки звука на iOS при самом первом тапе
+    window.addEventListener('touchstart', async () => {
+        await initAudio();
+    }, { once: true });
 </script>
 </body>
 </html>
