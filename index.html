@@ -149,91 +149,109 @@
         </div>
     </div>
 
-    <script>
-        const video = document.getElementById('webcam');
-        const flash = document.getElementById('flash');
-        const instruction = document.getElementById('instruction');
-        const resultDiv = document.getElementById('result');
-        const toyTitle = document.getElementById('toy-title');
-        const toyCost = document.getElementById('toy-cost');
+<script>
+    const video = document.getElementById('webcam');
+    const flash = document.getElementById('flash');
+    const instruction = document.getElementById('instruction');
+    const resultDiv = document.getElementById('result');
+    const toyTitle = document.getElementById('toy-title');
+    const toyCost = document.getElementById('toy-cost');
 
-        // Список игрушек, которые будут выпадать случайно
-        const toysDatabase = [
-            { name: "", minPrice: 150, maxPrice: 500 },
-            { name: "", minPrice: 100, maxPrice: 400 },
-            { name: "", minPrice: 200, maxPrice: 600 },
-            { name: "", minPrice: 300, maxPrice: 800 },
-            { name: "", minPrice: 250, maxPrice: 550 },
-            { name: "", minPrice: 400, maxPrice: 990 },
-            { name: "", minPrice: 200, maxPrice: 450 },
-            { name: "", minPrice: 50, maxPrice: 150 },
-            { name: "", minPrice: 40, maxPrice: 100 },
-            { name: "", minPrice: 250, maxPrice: 700 }
-        ];
+    // Список игрушек
+    const toysDatabase = [
+        { name: "🧸 Плюшевый Мишка", minPrice: 150, maxPrice: 500 },
+        { name: "🚗 Быстрая Машинка", minPrice: 100, maxPrice: 400 },
+        { name: "🦖 Грозный Динозавр", minPrice: 200, maxPrice: 600 },
+        { name: "🤖 Робот-Защитник", minPrice: 300, maxPrice: 800 },
+        { name: "🛩️ Супер Самолёт", minPrice: 250, maxPrice: 550 },
+        { name: "🧱 Конструктор Лего", minPrice: 400, maxPrice: 990 },
+        { name: "🪆 Кукла Красавица", minPrice: 200, maxPrice: 450 },
+        { name: "⚽️ Весёлый Мячик", minPrice: 50, maxPrice: 150 },
+        { name: "🦆 Уточка для ванной", minPrice: 40, maxPrice: 100 },
+        { name: "🦄 Волшебный Единорог", minPrice: 250, maxPrice: 700 }
+    ];
 
-        // Включение настоящей камеры заднего вида
-        async function initCamera() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: "environment" }, // Задняя камера
-                    audio: false
-                });
-                video.srcObject = stream;
-            } catch (err) {
-                console.error("Ошибка доступа к камере: ", err);
-                instruction.innerText = "⚠️ Дайте разрешение к камере в настройках браузера!";
-            }
+    // Инициализируем аудио (на iOS оно изначально заблокировано "suspended")
+    let audioCtx = null;
+
+    function initAudio() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         }
-
-        // Звуковой движок (Пик!)
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        function playBeep() {
-            if (audioCtx.state === 'suspended') audioCtx.resume();
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.type = 'sine';
-            osc.frequency.value = 1300; // Звонкий писк
-            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-            osc.start();
-            osc.stop(audioCtx.currentTime + 0.1);
+        // Принудительно "будим" аудио-контекст на iOS
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
         }
+    }
 
-        let isScanning = false;
-
-        // Функция симуляции сканирования
-        function scanToy() {
-            if (isScanning) return; // Защита от частых кликов
-            isScanning = true;
-
-            // Играем звук и делаем визуальную вспышку
-            playBeep();
-            flash.style.opacity = '0.7';
-            setTimeout(() => flash.style.opacity = '0', 100);
-
-            // Вибрация (для Android)
-            if (navigator.vibrate) navigator.vibrate(80);
-
-            // Выбираем случайную игрушку из списка
-            const randomToy = toysDatabase[Math.floor(Math.random() * toysDatabase.length)];
-            // Генерируем случайную цену
-            const randomPrice = Math.floor(Math.random() * (randomToy.maxPrice - randomToy.minPrice + 1)) + randomToy.minPrice;
-
-            // Обновляем текст на экране
-            instruction.style.display = 'none';
-            resultDiv.style.display = 'block';
-            toyTitle.innerText = randomToy.name;
-            toyCost.innerText = randomPrice + " руб.";
-
-            // Разрешаем следующий скан через 1.5 секунды
-            setTimeout(() => {
-                isScanning = false;
-            }, 1500);
+    // Включение камеры
+    async function initCamera() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: "environment" },
+                audio: false
+            });
+            video.srcObject = stream;
+        } catch (err) {
+            console.error("Ошибка доступа к камере: ", err);
+            instruction.innerText = "⚠️ Дайте разрешение к камере в настройках браузера!";
         }
+    }
 
-        // Запуск камеры при загрузке страницы
-        window.addEventListener('DOMContentLoaded', initCamera);
-    </script>
+    // Функция звука
+    function playBeep() {
+        if (!audioCtx) initAudio();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        
+        osc.type = 'sine';
+        osc.frequency.value = 1300; 
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.1);
+    }
+
+    let isScanning = false;
+
+    // Главная функция сканирования
+    function scanToy() {
+        // ВАЖНО: Активируем звук при самом первом тапе по экрану
+        initAudio();
+
+        if (isScanning) return; 
+        isScanning = true;
+
+        // Играем звук и делаем вспышку
+        playBeep();
+        flash.style.opacity = '0.7';
+        setTimeout(() => flash.style.opacity = '0', 100);
+
+        if (navigator.vibrate) navigator.vibrate(80);
+
+        const randomToy = toysDatabase[Math.floor(Math.random() * toysDatabase.length)];
+        const randomPrice = Math.floor(Math.random() * (randomToy.maxPrice - randomToy.minPrice + 1)) + randomToy.minPrice;
+
+        instruction.style.display = 'none';
+        resultDiv.style.display = 'block';
+        toyTitle.innerText = randomToy.name;
+        toyCost.innerText = randomPrice + " руб.";
+
+        setTimeout(() => {
+            isScanning = false;
+        }, 1500);
+    }
+
+    // Запуск камеры
+    window.addEventListener('DOMContentLoaded', initCamera);
+
+    // Дополнительный трюк для iOS: "будим" звук вообще при любом прикосновении к экрану
+    window.addEventListener('touchstart', initAudio, { once: true });
+</script>
 </body>
 </html>
