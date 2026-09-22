@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Детский Сканер Игрушек</title>
+    <style>
+        body {
+            font-family: 'Comic Sans MS', 'Chalkboard SE', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #ffeb3b;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        header {
+            background-color: #ff5722;
+            color: white;
+            width: 100%;
+            text-align: center;
+            padding: 12px 0;
+            font-size: 26px;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            z-index: 10;
+        }
+
+        #camera-view {
+            width: 100%;
+            flex: 1;
+            position: relative;
+            background: #000;
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Прицел сканера */
+        .laser-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 260px;
+            height: 260px;
+            border: 4px dashed #00ffcc;
+            border-radius: 30px;
+            box-shadow: 0 0 20px rgba(0, 255, 204, 0.5);
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .laser-line {
+            width: 90%;
+            height: 4px;
+            background-color: #ff0055;
+            box-shadow: 0 0 12px #ff0055;
+            position: absolute;
+            animation: scan 2s infinite ease-in-out;
+        }
+
+        @keyframes scan {
+            0%, 100% { top: 10%; }
+            50% { top: 90%; }
+        }
+
+        /* Вспышка при сканировании */
+        #flash {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: white;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.1s ease-out;
+            z-index: 5;
+        }
+
+        /* Панель чека внизу */
+        #receipt-panel {
+            width: 100%;
+            background: white;
+            padding: 15px;
+            box-sizing: border-box;
+            border-top-left-radius: 25px;
+            border-top-right-radius: 25px;
+            box-shadow: 0 -5px 15px rgba(0,0,0,0.15);
+            text-align: center;
+            min-height: 140px;
+            z-index: 10;
+        }
+
+        .hint {
+            font-size: 18px;
+            color: #666;
+            margin: 10px 0;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+
+        .toy-name {
+            font-size: 28px;
+            color: #4caf50;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .toy-price {
+            font-size: 24px;
+            color: #ff9800;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <header>🛒 Моя Касса</header>
+
+    <!-- Поле камеры. Клик в любое место активирует скан -->
+    <div id="camera-view" onclick="scanToy()">
+        <video id="webcam" autoplay playsinline muted></video>
+        <div class="laser-container">
+            <div class="laser-line"></div>
+        </div>
+        <div id="flash"></div>
+    </div>
+
+    <!-- Результат сканирования -->
+    <div id="receipt-panel">
+        <div id="instruction" class="hint">Наведи на игрушку и НАЖМИ на экран! 👇</div>
+        <div id="result" style="display: none;">
+            <div class="toy-name" id="toy-title">🧸 Плюшевый Мишка</div>
+            <div class="toy-price" id="toy-cost">100 руб.</div>
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('webcam');
+        const flash = document.getElementById('flash');
+        const instruction = document.getElementById('instruction');
+        const resultDiv = document.getElementById('result');
+        const toyTitle = document.getElementById('toy-title');
+        const toyCost = document.getElementById('toy-cost');
+
+        // Список игрушек, которые будут выпадать случайно
+        const toysDatabase = [
+            { name: "", minPrice: 150, maxPrice: 500 },
+            { name: "", minPrice: 100, maxPrice: 400 },
+            { name: "", minPrice: 200, maxPrice: 600 },
+            { name: "", minPrice: 300, maxPrice: 800 },
+            { name: "", minPrice: 250, maxPrice: 550 },
+            { name: "", minPrice: 400, maxPrice: 990 },
+            { name: "", minPrice: 200, maxPrice: 450 },
+            { name: "", minPrice: 50, maxPrice: 150 },
+            { name: "", minPrice: 40, maxPrice: 100 },
+            { name: "", minPrice: 250, maxPrice: 700 }
+        ];
+
+        // Включение настоящей камеры заднего вида
+        async function initCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "environment" }, // Задняя камера
+                    audio: false
+                });
+                video.srcObject = stream;
+            } catch (err) {
+                console.error("Ошибка доступа к камере: ", err);
+                instruction.innerText = "⚠️ Дайте разрешение к камере в настройках браузера!";
+            }
+        }
+
+        // Звуковой движок (Пик!)
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playBeep() {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.type = 'sine';
+            osc.frequency.value = 1300; // Звонкий писк
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.1);
+        }
+
+        let isScanning = false;
+
+        // Функция симуляции сканирования
+        function scanToy() {
+            if (isScanning) return; // Защита от частых кликов
+            isScanning = true;
+
+            // Играем звук и делаем визуальную вспышку
+            playBeep();
+            flash.style.opacity = '0.7';
+            setTimeout(() => flash.style.opacity = '0', 100);
+
+            // Вибрация (для Android)
+            if (navigator.vibrate) navigator.vibrate(80);
+
+            // Выбираем случайную игрушку из списка
+            const randomToy = toysDatabase[Math.floor(Math.random() * toysDatabase.length)];
+            // Генерируем случайную цену
+            const randomPrice = Math.floor(Math.random() * (randomToy.maxPrice - randomToy.minPrice + 1)) + randomToy.minPrice;
+
+            // Обновляем текст на экране
+            instruction.style.display = 'none';
+            resultDiv.style.display = 'block';
+            toyTitle.innerText = randomToy.name;
+            toyCost.innerText = randomPrice + " руб.";
+
+            // Разрешаем следующий скан через 1.5 секунды
+            setTimeout(() => {
+                isScanning = false;
+            }, 1500);
+        }
+
+        // Запуск камеры при загрузке страницы
+        window.addEventListener('DOMContentLoaded', initCamera);
+    </script>
+</body>
+</html>
